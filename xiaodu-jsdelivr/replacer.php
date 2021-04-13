@@ -27,7 +27,7 @@ $xiaodu_jsdelivr_data = null;
 $xiaodu_jsdelivr_pattern = null;
 $xiaodu_jsdelivr_versions = null;
 
-function _xiaodu_jsdelivr_global_data_loader() {
+function xiaodu_jsdelivr_global_data_loader() {
     global $xiaodu_jsdelivr_data;
     if ($xiaodu_jsdelivr_data !== NULL) {
         return $xiaodu_jsdelivr_data;
@@ -65,8 +65,8 @@ function _xiaodu_jsdelivr_global_data_loader() {
     return $xiaodu_jsdelivr_data;
 }
 
-function _xiaodu_jsdelivr_url_replacer($src) {
-    $data = _xiaodu_jsdelivr_global_data_loader();
+function xiaodu_jsdelivr_url_replacer($src) {
+    $data = xiaodu_jsdelivr_global_data_loader();
     if (!$data) {
         return $src;
     }
@@ -78,7 +78,7 @@ function _xiaodu_jsdelivr_url_replacer($src) {
     $file_path = $matches[3];
     $file = $path . '/' . $file_path;
     if (!isset($data[$file])) {
-        _xiaodu_jsdelivr_debug_log("No scan result for {$file}");
+        xiaodu_jsdelivr_debug_log("No scan result for {$file}");
         return $src;
     }
     $entry = $data[$file];
@@ -126,12 +126,12 @@ function _xiaodu_jsdelivr_url_replacer($src) {
         return $src;
     }
     if ($data_version !== $current_version) {
-        _xiaodu_jsdelivr_debug_log("Version mismatch, {$file}, {$data_version}, {$current_version}");
+        xiaodu_jsdelivr_debug_log("Version mismatch, {$file}, {$data_version}, {$current_version}");
         return $src;
     }
     // Version matches, replace src with scanned URL
     return $entry['url'];
 }
 
-add_filter( 'script_loader_src', '_xiaodu_jsdelivr_url_replacer', 20, 1 );
-add_filter( 'style_loader_src', '_xiaodu_jsdelivr_url_replacer', 20, 1 );
+add_filter( 'script_loader_src', 'xiaodu_jsdelivr_url_replacer', 20, 1 );
+add_filter( 'style_loader_src', 'xiaodu_jsdelivr_url_replacer', 20, 1 );

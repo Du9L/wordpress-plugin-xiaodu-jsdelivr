@@ -42,31 +42,31 @@ function xiaodu_jsdelivr_deactivation()
 
 // After upgraded, steal the lock and schedule an immediate scan
 
-function _xiaodu_jsdelivr_steal_lock_and_reschedule() {
+function xiaodu_jsdelivr_steal_lock_and_reschedule() {
     delete_option('xiaodu_jsdelivr_lock');
     wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
     wp_schedule_event(time(), 'daily', XIAODU_JSDELIVR_CRON_HOOK);
 }
 
-add_action('upgrader_process_complete', '_xiaodu_jsdelivr_on_upgrade', 20, 2);
+add_action('upgrader_process_complete', 'xiaodu_jsdelivr_on_upgrade', 20, 2);
 
-function _xiaodu_jsdelivr_on_upgrade($wp_upgrader, $hook_extra) {
+function xiaodu_jsdelivr_on_upgrade($wp_upgrader, $hook_extra) {
     if (isset($hook_extra['type']) && in_array($hook_extra['type'], array('core', 'plugin', 'theme'))) {
-        _xiaodu_jsdelivr_steal_lock_and_reschedule();
+        xiaodu_jsdelivr_steal_lock_and_reschedule();
     }
 }
 
 // Scanning entry point
 
-add_action(XIAODU_JSDELIVR_CRON_HOOK, '_xiaodu_jsdelivr_scan');
+add_action(XIAODU_JSDELIVR_CRON_HOOK, 'xiaodu_jsdelivr_scan');
 
-function _xiaodu_jsdelivr_scan_directory($dir, &$options) {
+function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     if ($options['is_timeout'] || time() - $options['start_time'] > 30) {
-        _xiaodu_jsdelivr_debug_log("SCAN TIME OUT $dir");
+        xiaodu_jsdelivr_debug_log("SCAN TIME OUT $dir");
         $options['is_timeout'] = TRUE;
         return;
     }
-    _xiaodu_jsdelivr_debug_log("START DIR SCAN $dir ");
+    xiaodu_jsdelivr_debug_log("START DIR SCAN $dir ");
     $dir_full_path = ABSPATH . $dir;
     $dir_contents = @scandir($dir_full_path, SCANDIR_SORT_NONE);
     if ($dir_contents === FALSE || !is_array($dir_contents)) {
@@ -86,7 +86,7 @@ function _xiaodu_jsdelivr_scan_directory($dir, &$options) {
         $full_path = $dir_full_path . '/' . $name;
         $path = $dir . '/' . $name;
         if (is_dir($full_path)) {
-            _xiaodu_jsdelivr_scan_directory($path, $options);
+            xiaodu_jsdelivr_scan_directory($path, $options);
             if ($options['is_timeout']) {
                 return;
             }
@@ -117,7 +117,7 @@ function _xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 $concat_path = ($skip_length <= 0) ? $path : substr($path, $skip_length);
                 $scan_url = $hint . $concat_path;
                 $scan_hash = @hash_file('sha256', $scan_url);
-                _xiaodu_jsdelivr_debug_log("TRY $path [$file_hash] -> $scan_url [$scan_hash]");
+                xiaodu_jsdelivr_debug_log("TRY $path [$file_hash] -> $scan_url [$scan_hash]");
                 if ($scan_hash === $file_hash) {
                     $scan_result = $scan_url;
                     break;
@@ -136,7 +136,7 @@ function _xiaodu_jsdelivr_scan_directory($dir, &$options) {
                     }
                     $scan_url = "https://cdn.jsdelivr.net/{$api_res['type']}/{$api_res['name']}@{$api_res['version']}{$api_res['file']}";
                     $scan_hash = @hash_file('sha256', $scan_url);
-                    _xiaodu_jsdelivr_debug_log("LOOKUP $path [$file_hash] -> $scan_url [$scan_hash]");
+                    xiaodu_jsdelivr_debug_log("LOOKUP $path [$file_hash] -> $scan_url [$scan_hash]");
                     if ($scan_hash === $file_hash) {
                         $scan_result = $scan_url;
                     }
@@ -151,15 +151,15 @@ function _xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 'sha256' => $file_hash, 
                 'url' => $scan_result
             );
-            _xiaodu_jsdelivr_debug_log("FOUND MATCH: $path -> $scan_result");
+            xiaodu_jsdelivr_debug_log("FOUND MATCH: $path -> $scan_result");
         }
     }
 }
 
-function _xiaodu_jsdelivr_scan() {
+function xiaodu_jsdelivr_scan() {
     // Check and set lock
     $now = time();
-    _xiaodu_jsdelivr_debug_log("START SCAN $now");
+    xiaodu_jsdelivr_debug_log("START SCAN $now");
     $lock = get_option('xiaodu_jsdelivr_lock');
     if ($lock !== FALSE && $now - intval($lock) < 86400) {
         error_log("_xiaodu_jsdelivr_scan: Lock not expired, " . print_r($lock, TRUE));
@@ -196,7 +196,7 @@ function _xiaodu_jsdelivr_scan() {
         'wp-includes',
     );
     foreach ($scan_dir_list as $dir) {
-        _xiaodu_jsdelivr_scan_directory($dir, $options);
+        xiaodu_jsdelivr_scan_directory($dir, $options);
         if ($options['is_timeout']) {
             break;
         }
@@ -236,7 +236,7 @@ function _xiaodu_jsdelivr_scan() {
                 $jsdelivr_plugin_hint => strlen($plugin_dir) + 1, 
                 $jsdelivr_wp_hint => 0,
             );
-            _xiaodu_jsdelivr_scan_directory($plugin_dir, $options);
+            xiaodu_jsdelivr_scan_directory($plugin_dir, $options);
             if ($options['is_timeout']) {
                 break;
             }
@@ -273,7 +273,7 @@ function _xiaodu_jsdelivr_scan() {
                 $jsdelivr_theme_hint => strlen($theme_dir) + 1,
                 $jsdelivr_wp_hint => 0,
             );
-            _xiaodu_jsdelivr_scan_directory($theme_dir, $options);
+            xiaodu_jsdelivr_scan_directory($theme_dir, $options);
             if ($options['is_timeout']) {
                 break;
             }
@@ -291,10 +291,10 @@ function _xiaodu_jsdelivr_scan() {
     }
     update_option('xiaodu_jsdelivr_data', $new_data);
     delete_option('xiaodu_jsdelivr_lock');
-    _xiaodu_jsdelivr_debug_log("FINISH SCAN $now");
+    xiaodu_jsdelivr_debug_log("FINISH SCAN $now");
     if ($options['is_timeout']) {
         wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
         wp_schedule_event(time() + 10, 'daily', XIAODU_JSDELIVR_CRON_HOOK);
-        _xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT, WILL SCAN AGAIN $now");
+        xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT, WILL SCAN AGAIN $now");
     }
 }

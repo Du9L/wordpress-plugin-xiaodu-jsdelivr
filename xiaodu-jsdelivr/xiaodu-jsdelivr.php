@@ -32,7 +32,7 @@ along with xiaodu-jsdelivr.  If not, see <https://www.gnu.org/licenses/>.
 
 if ( ! defined( 'ABSPATH' ) ) { die( 'Invalid request.' ); }
 
-function _xiaodu_jsdelivr_debug_log($content, $var=NULL) {
+function xiaodu_jsdelivr_debug_log($content, $var=NULL) {
     if (!defined('WP_DEBUG_LOG') || !WP_DEBUG_LOG) {
         return;
     }
