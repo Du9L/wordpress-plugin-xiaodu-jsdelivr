@@ -203,7 +203,9 @@ function xiaodu_jsdelivr_scan() {
     }
 
     // Scan plugins
-    if (!$options['is_timeout']) {
+    $plugin_root = WP_PLUGIN_DIR;
+    if (!$options['is_timeout'] && ABSPATH === substr($plugin_root, 0, strlen(ABSPATH))) {
+        $plugin_parent_dir = substr(WP_PLUGIN_DIR, strlen(ABSPATH));
         if ( ! function_exists( 'get_plugins' ) ) {
             require_once(ABSPATH . 'wp-admin/includes/plugin.php');
         }
@@ -219,14 +221,14 @@ function xiaodu_jsdelivr_scan() {
             }
             // Add path hint
             $plugin_dir_name = substr($plugin_file, 0, $first_slash);
-            $plugin_dir = 'wp-content/plugins/' . $plugin_dir_name;
+            $plugin_dir = $plugin_parent_dir . '/' . $plugin_dir_name;
             if (isset($new_data[$plugin_dir])) {
                 error_log("_xiaodu_jsdelivr_scan: Repeated plugin dir, " . $plugin_dir);
                 continue;
             }
             $plugin_version = $plugin_data['Version'];
             $new_data['^' . $plugin_dir] = array(
-                "hint_file" => 'wp-content/plugins/' . $plugin_file, "version" => $plugin_version,
+                "hint_file" => $plugin_parent_dir . '/' . $plugin_file, "version" => $plugin_version,
             );
             // Scan folder
             $jsdelivr_plugin_hint = "https://cdn.jsdelivr.net/wp/plugins/{$plugin_dir_name}/tags/{$plugin_version}/";

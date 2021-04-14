@@ -42,13 +42,13 @@ function xiaodu_jsdelivr_global_data_loader() {
     $pathes = array(
         'wp-admin',
         'wp-includes',
-        'wp-content/plugins',
     );
+    if (defined('WP_PLUGIN_DIR') && ABSPATH === substr(WP_PLUGIN_DIR, 0, strlen(ABSPATH))) {
+        $pathes []= substr(WP_PLUGIN_DIR, strlen(ABSPATH));
+    }
     global $wp_theme_directories;
     foreach ($wp_theme_directories as $theme_root) {
-        if ('wp-content' === substr($theme_root, 0, strlen('wp-content'))) {
-            $pathes []= $theme_root;
-        } else if (ABSPATH === substr($theme_root, 0, strlen(ABSPATH))) {
+        if (ABSPATH === substr($theme_root, 0, strlen(ABSPATH))) {
             $pathes []= substr($theme_root, strlen(ABSPATH));
         }
     }
