@@ -82,6 +82,7 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     $scan_hints = $options['scan_hints'];
     $version = $options['version'];
     $version_hint = $options['version_hint'];
+    $plugin_options = XiaoduJsdelivrOptions::inst();
     foreach ($dir_contents as $name) {
         $full_path = $dir_full_path . '/' . $name;
         $path = $dir . '/' . $name;
@@ -97,18 +98,54 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
         if (!in_array($ext, array('js', 'css'))) {
             continue;
         }
-        // Hash file content
-        $file_hash = @hash_file('sha256', $full_path);
-        if ($file_hash === FALSE) {
-            error_log("_xiaodu_jsdelivr_scan_directory: Hash failed, " . $full_path);
+        // Get file info
+        $file_stat = @stat($full_path);
+        if ($file_stat === FALSE) {
+            error_log("_xiaodu_jsdelivr_scan_directory: Stat failed, " . $full_path);
             continue;
         }
+        $file_hash = null;
         // Check if file is unchanged
-        if (isset($old_data[$path]) && $file_hash == $old_data[$path]['sha256']) {
-            $new_data[$path] = $old_data[$path];
-            $new_data[$path]['version'] = $version;
-            $new_data[$path]['version_hint'] = $version_hint;
-            continue;
+        if (isset($old_data[$path])) {
+            $file_unchanged = false;
+            $old_entry = &$old_data[$path];
+            if (!$plugin_options->scanner_always_hash &&
+                isset($old_entry['size'], $old_entry['mtime']) &&
+                $old_entry['size'] == $file_stat['size'] && $old_entry['mtime'] == $file_stat['mtime']
+                // Actually, if file sizes differ, their contents are obviously different... But I'm too lazy to handle it
+            ) {
+                $file_unchanged = true;
+                // xiaodu_jsdelivr_debug_log("File not changed (quick check)", $path);
+            } else {
+                // Fall back to calculating hash
+                $file_hash = @hash_file('sha256', $full_path);
+                if ($file_hash === FALSE) {
+                    error_log("_xiaodu_jsdelivr_scan_directory: Hash failed, " . $full_path);
+                    continue;
+                }
+                if ($file_hash == $old_entry['sha256']) {
+                    $file_unchanged = true;
+                    // xiaodu_jsdelivr_debug_log("File not changed (hashes match)", $path);
+                }
+            }
+
+            if ($file_unchanged) {
+                $new_entry = $old_entry;
+                $new_entry['version'] = $version;
+                $new_entry['version_hint'] = $version_hint;
+                $new_entry['size'] = $file_stat['size'];
+                $new_entry['mtime'] = $file_stat['mtime'];
+                $new_data[$path] = $new_entry;
+                continue;
+            }
+        }
+        // Hash file content if not already done
+        if ($file_hash === null) {
+            $file_hash = @hash_file('sha256', $full_path);
+            if ($file_hash === FALSE) {
+                error_log("_xiaodu_jsdelivr_scan_directory: Hash failed, " . $full_path);
+                continue;
+            }
         }
         // Scan using hints
         $scan_result = NULL;
@@ -146,9 +183,11 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
         // Save success result
         if ($scan_result !== NULL) {
             $new_data[$path] = array(
-                'version' => $version, 
+                'version' => $version,
                 'version_hint' => $version_hint,
-                'sha256' => $file_hash, 
+                'sha256' => $file_hash,
+                'size' => $file_stat['size'],
+                'mtime' => $file_stat['mtime'],
                 'url' => $scan_result
             );
             xiaodu_jsdelivr_debug_log("FOUND MATCH: $path -> $scan_result");
@@ -235,7 +274,7 @@ function xiaodu_jsdelivr_scan() {
             $options['version'] = $plugin_version;
             $options['version_hint'] = strlen($plugin_dir);
             $options['scan_hints'] = array(
-                $jsdelivr_plugin_hint => strlen($plugin_dir) + 1, 
+                $jsdelivr_plugin_hint => strlen($plugin_dir) + 1,
                 $jsdelivr_wp_hint => 0,
             );
             xiaodu_jsdelivr_scan_directory($plugin_dir, $options);
@@ -293,10 +332,11 @@ function xiaodu_jsdelivr_scan() {
     }
     update_option('xiaodu_jsdelivr_data', $new_data);
     delete_option('xiaodu_jsdelivr_lock');
-    xiaodu_jsdelivr_debug_log("FINISH SCAN $now");
+    xiaodu_jsdelivr_debug_log("FINISH SCAN $now, data size = " . count($new_data));
     if ($options['is_timeout']) {
         wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
-        wp_schedule_event(time() + 10, 'daily', XIAODU_JSDELIVR_CRON_HOOK);
-        xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT, WILL SCAN AGAIN $now");
+        $next_scan = time() + 1;
+        wp_schedule_event($next_scan, 'daily', XIAODU_JSDELIVR_CRON_HOOK);
+        xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT, WILL SCAN AGAIN $next_scan");
     }
 }

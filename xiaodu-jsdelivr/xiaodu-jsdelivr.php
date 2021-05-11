@@ -42,8 +42,14 @@ function xiaodu_jsdelivr_debug_log($content, $var=NULL) {
     error_log('[xiaodu_jsdelivr_debug] ' . $content);
 }
 
-require_once(plugin_dir_path(__FILE__) . 'scanner.php');
+$xiaodu_jsdelivr_plugin_dir_path = plugin_dir_path(__FILE__);
+
+require_once($xiaodu_jsdelivr_plugin_dir_path . 'inc/class-options.php');
+
+require_once($xiaodu_jsdelivr_plugin_dir_path . 'scanner.php');
 register_activation_hook(__FILE__, 'xiaodu_jsdelivr_activation');
 register_deactivation_hook(__FILE__, 'xiaodu_jsdelivr_deactivation');
 
-require_once(plugin_dir_path(__FILE__) . 'replacer.php');
+require_once($xiaodu_jsdelivr_plugin_dir_path . 'replacer.php');
+
+require_once($xiaodu_jsdelivr_plugin_dir_path . 'options-page.php');
