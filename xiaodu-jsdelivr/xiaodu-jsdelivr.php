@@ -49,6 +49,7 @@ require_once($xiaodu_jsdelivr_plugin_dir_path . 'inc/class-options.php');
 require_once($xiaodu_jsdelivr_plugin_dir_path . 'scanner.php');
 register_activation_hook(__FILE__, 'xiaodu_jsdelivr_activation');
 register_deactivation_hook(__FILE__, 'xiaodu_jsdelivr_deactivation');
+register_uninstall_hook(__FILE__, 'xiaodu_jsdelivr_uninstall');
 
 require_once($xiaodu_jsdelivr_plugin_dir_path . 'replacer.php');
 

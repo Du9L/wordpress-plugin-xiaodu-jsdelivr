@@ -50,15 +50,36 @@ class XiaoduJsdelivrOptions
         foreach ($vars as $k => $v) {
             $exist_in_options = array_key_exists($k, $options);
             if (is_bool($v)) {
-                if (!$exist_in_options) {
-                    $this->{$k} = false;
-                } else {
-                    $this->{$k} = $options[$k] == '1';
-                }
+                $this->{$k} = $exist_in_options ? boolval($options[$k]) : false;
+            } else if (is_int($v)) {
+                $this->{$k} = $exist_in_options ? intval($options[$k]) : 0;
             } else {
                 xiaodu_jsdelivr_debug_log('Unsupported option type: ' . gettype($v));
             }
         }
+    }
+
+    /**
+     * Sanitize raw option values before saving
+     * @param $option_value
+     * @return array
+     */
+    public function sanitize_post_option($option_value) {
+        if (!is_array($option_value)) {
+            $option_value = array();
+        }
+        $vars = get_object_vars($this);
+        foreach ($vars as $k => $v) {
+            $exist_in_value = array_key_exists($k, $option_value);
+            if (is_bool($v)) {
+                $option_value[$k] = $exist_in_value ? $option_value[$k] == '1' : false;
+            } else if (is_int($v)) {
+                $option_value[$k] = $exist_in_value ? intval($option_value[$k]) : 0;
+            } else {
+                xiaodu_jsdelivr_debug_log('Unsupported option type: ' . gettype($v));
+            }
+        }
+        return $option_value;
     }
 
     /**
@@ -78,4 +99,10 @@ class XiaoduJsdelivrOptions
      * @var bool
      */
     public $scanner_always_hash = false;
+
+    /**
+     * Scanner timeout
+     * @var int
+     */
+    public $scanner_timeout = 0;
 }

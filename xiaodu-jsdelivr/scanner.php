@@ -27,32 +27,39 @@ DEFINE('XIAODU_JSDELIVR_CRON_HOOK', 'xiaodu_jsdelivr_cron');
 
 // Activation and deactivation hooks
 
+function xiaodu_jsdelivr_reschedule($steal_lock = false, $delay = 0) {
+    if ($steal_lock) {
+        delete_transient('xiaodu_jsdelivr_lock');
+    }
+    wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
+    $next_scan = time() + $delay;
+    wp_schedule_event($next_scan, 'daily', XIAODU_JSDELIVR_CRON_HOOK);
+    return $next_scan;
+}
+
 function xiaodu_jsdelivr_activation()
 {
-    wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
-    wp_schedule_event(time(), 'daily', XIAODU_JSDELIVR_CRON_HOOK);
+    xiaodu_jsdelivr_reschedule();
 }
 
 function xiaodu_jsdelivr_deactivation()
 {
     wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
-    delete_option('xiaodu_jsdelivr_lock');
+}
+
+function xiaodu_jsdelivr_uninstall() {
+    delete_transient('xiaodu_jsdelivr_lock');
     delete_option('xiaodu_jsdelivr_data');
+    delete_option(XiaoduJsdelivrOptions::$options_key);
 }
 
 // After upgraded, steal the lock and schedule an immediate scan
-
-function xiaodu_jsdelivr_steal_lock_and_reschedule() {
-    delete_option('xiaodu_jsdelivr_lock');
-    wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
-    wp_schedule_event(time(), 'daily', XIAODU_JSDELIVR_CRON_HOOK);
-}
 
 add_action('upgrader_process_complete', 'xiaodu_jsdelivr_on_upgrade', 20, 2);
 
 function xiaodu_jsdelivr_on_upgrade($wp_upgrader, $hook_extra) {
     if (isset($hook_extra['type']) && in_array($hook_extra['type'], array('core', 'plugin', 'theme'))) {
-        xiaodu_jsdelivr_steal_lock_and_reschedule();
+        xiaodu_jsdelivr_reschedule(true);
     }
 }
 
@@ -60,12 +67,24 @@ function xiaodu_jsdelivr_on_upgrade($wp_upgrader, $hook_extra) {
 
 add_action(XIAODU_JSDELIVR_CRON_HOOK, 'xiaodu_jsdelivr_scan');
 
-function xiaodu_jsdelivr_scan_directory($dir, &$options) {
-    if ($options['is_timeout'] || time() - $options['start_time'] > 30) {
-        xiaodu_jsdelivr_debug_log("SCAN TIME OUT $dir");
-        $options['is_timeout'] = TRUE;
-        return;
+function xiaodu_jsdelivr_check_scan_timeout(&$options) {
+    if ($options['is_timeout'] || (microtime(true) - $options['start_time'] > $options['timeout'])) {
+        $options['is_timeout'] = true;
+        return true;
     }
+    return false;
+}
+
+function xiaodu_jsdelivr_hash_remote_url(&$options, $url) {
+    $content = @file_get_contents($url, false, $options['stream_ctx']);
+    if ($content === false) {
+        error_log("xiaodu_jsdelivr_hash_remote_url: Get remote url failed, " . $url);
+        return false;
+    }
+    return hash('sha256', $content);
+}
+
+function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     xiaodu_jsdelivr_debug_log("START DIR SCAN $dir ");
     $dir_full_path = ABSPATH . $dir;
     $dir_contents = @scandir($dir_full_path, SCANDIR_SORT_NONE);
@@ -100,8 +119,12 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
         }
         // Get file info
         $file_stat = @stat($full_path);
-        if ($file_stat === FALSE) {
+        if ($file_stat === FALSE || !isset($file_stat['size'], $file_stat['mtime'])) {
             error_log("_xiaodu_jsdelivr_scan_directory: Stat failed, " . $full_path);
+            continue;
+        }
+        if ($file_stat['size'] > 8388608) {
+            error_log("_xiaodu_jsdelivr_scan_directory: File too large, " . $full_path);
             continue;
         }
         $file_hash = null;
@@ -153,7 +176,14 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
             foreach ($scan_hints as $hint => $skip_length) {
                 $concat_path = ($skip_length <= 0) ? $path : substr($path, $skip_length);
                 $scan_url = $hint . $concat_path;
-                $scan_hash = @hash_file('sha256', $scan_url);
+                $scan_hash = xiaodu_jsdelivr_hash_remote_url($options, $scan_url);
+                if ($scan_hash === false) {
+                    if (xiaodu_jsdelivr_check_scan_timeout($options)) {
+                        xiaodu_jsdelivr_debug_log("SCAN TIME OUT $path");
+                        return;
+                    }
+                    continue;
+                }
                 xiaodu_jsdelivr_debug_log("TRY $path [$file_hash] -> $scan_url [$scan_hash]");
                 if ($scan_hash === $file_hash) {
                     $scan_result = $scan_url;
@@ -167,12 +197,19 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
             $api_res = @file_get_contents($api_url);
             if ($api_res !== FALSE) {
                 $api_res = @json_decode($api_res, TRUE, 2);
-                if ($api_res !== NULL && isset($api_res['file'])) {
+                if ($api_res !== NULL && isset($api_res['type'], $api_res['name'], $api_res['version'], $api_res['file'])) {
                     if ($api_res['file'][0] != '/') {
                         $api_res['file'] = '/' . $api_res['file'];
                     }
                     $scan_url = "https://cdn.jsdelivr.net/{$api_res['type']}/{$api_res['name']}@{$api_res['version']}{$api_res['file']}";
-                    $scan_hash = @hash_file('sha256', $scan_url);
+                    $scan_hash = xiaodu_jsdelivr_hash_remote_url($options, $scan_url);
+                    if ($scan_hash === false) {
+                        if (xiaodu_jsdelivr_check_scan_timeout($options)) {
+                            xiaodu_jsdelivr_debug_log("SCAN TIME OUT $path");
+                            return;
+                        }
+                        continue;
+                    }
                     xiaodu_jsdelivr_debug_log("LOOKUP $path [$file_hash] -> $scan_url [$scan_hash]");
                     if ($scan_hash === $file_hash) {
                         $scan_result = $scan_url;
@@ -192,19 +229,24 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
             );
             xiaodu_jsdelivr_debug_log("FOUND MATCH: $path -> $scan_result");
         }
+        if (xiaodu_jsdelivr_check_scan_timeout($options)) {
+            xiaodu_jsdelivr_debug_log("SCAN TIME OUT $dir");
+            return;
+        }
     }
 }
 
 function xiaodu_jsdelivr_scan() {
     // Check and set lock
-    $now = time();
+    $now = microtime(true);
     xiaodu_jsdelivr_debug_log("START SCAN $now");
-    $lock = get_option('xiaodu_jsdelivr_lock');
-    if ($lock !== FALSE && $now - intval($lock) < 86400) {
+    $lock_write_content = sprintf( '%.22F', $now );
+    $lock = get_transient('xiaodu_jsdelivr_lock');
+    if ($lock !== FALSE) {
         error_log("_xiaodu_jsdelivr_scan: Lock not expired, " . print_r($lock, TRUE));
         return;
     }
-    if (add_option('xiaodu_jsdelivr_lock', $now) === FALSE) {
+    if (set_transient('xiaodu_jsdelivr_lock', $lock_write_content, 360) === FALSE) {
         error_log("_xiaodu_jsdelivr_scan: Lock failed");
         return;
     }
@@ -218,6 +260,24 @@ function xiaodu_jsdelivr_scan() {
     }
     $new_data = array();
 
+    // Calculate appropriate timeout
+    $sys_time_limit = function_exists( 'ini_get' ) ? intval(ini_get( 'max_execution_time' )) : 0;
+    if ($sys_time_limit <= 0) {
+        $sys_time_limit = 300;
+    }
+    $plugin_options = XiaoduJsdelivrOptions::inst();
+    $user_time_limit = intval($plugin_options->scanner_timeout);
+    if ($user_time_limit <= 0) {
+        $user_time_limit = 300;
+    }
+    $timeout = min($sys_time_limit, $user_time_limit, 300);  // At most 300s
+    /**
+     * jsDelivr can be REALLY slow sometimes, especially when requesting a file that doesn't exist in the cache.
+     * So here a safe margin of 10s is set, along with the 8s timeout below, to make these slow requests possible,
+     * while ensuring that a single scan cannot exceed the time limits.
+     */
+    $timeout = max($timeout - 10, 10);
+
     // Scan base WordPress files
     global $wp_version;
     $jsdelivr_wp_hint = "https://cdn.jsdelivr.net/gh/WordPress/WordPress@{$wp_version}/";
@@ -227,7 +287,9 @@ function xiaodu_jsdelivr_scan() {
         "scan_hints" => array($jsdelivr_wp_hint => 0),
         "version" => $wp_version,
         "version_hint" => NULL,
-        "start_time" => $now,
+        "start_time" => defined('WP_START_TIMESTAMP') ? WP_START_TIMESTAMP : $now,
+        "timeout" => $timeout,
+        "stream_ctx" => stream_context_create(array('http' => array('timeout' => 8))),
         "is_timeout" => FALSE,
     );
     $scan_dir_list = array(
@@ -322,8 +384,8 @@ function xiaodu_jsdelivr_scan() {
     }
 
     // Save result and release lock
-    $lock = get_option('xiaodu_jsdelivr_lock');
-    if ($lock !== $now) {
+    $lock = get_transient('xiaodu_jsdelivr_lock');
+    if ($lock !== $lock_write_content) {
         error_log("_xiaodu_jsdelivr_scan: Lock was stolen, " . print_r($lock, TRUE));
         return;
     }
@@ -331,12 +393,10 @@ function xiaodu_jsdelivr_scan() {
         $new_data = array_replace($old_data, $new_data);
     }
     update_option('xiaodu_jsdelivr_data', $new_data);
-    delete_option('xiaodu_jsdelivr_lock');
+    delete_transient('xiaodu_jsdelivr_lock');
     xiaodu_jsdelivr_debug_log("FINISH SCAN $now, data size = " . count($new_data));
     if ($options['is_timeout']) {
-        wp_clear_scheduled_hook(XIAODU_JSDELIVR_CRON_HOOK);
-        $next_scan = time() + 1;
-        wp_schedule_event($next_scan, 'daily', XIAODU_JSDELIVR_CRON_HOOK);
+        $next_scan = xiaodu_jsdelivr_reschedule(false, 1);
         xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT, WILL SCAN AGAIN $next_scan");
     }
 }
