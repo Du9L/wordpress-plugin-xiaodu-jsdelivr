@@ -36,6 +36,11 @@ is not serving stale pages.
 
 == Changelog ==
 
+= 1.2 =
+* Record failed paths during scans to avoid unnecessary attempts in future scans
+* Show scan result and failed paths on options page
+* Add an option to randomize scan order
+
 = 1.1 =
 * Provide an options page with status display and two new options
 * Better scan timeout handling
