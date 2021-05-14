@@ -84,6 +84,32 @@ function xiaodu_jsdelivr_hash_remote_url(&$options, $url) {
     return hash('sha256', $content);
 }
 
+/**
+ * @param $old_entry array
+ * @param $full_path string
+ * @param $file_hash null | string
+ * @param $file_stat array
+ * @param $plugin_options XiaoduJsdelivrOptions
+ * @return bool true = unchanged
+ */
+function xiaodu_jsdelivr_check_file_unchanged($old_entry, $full_path, &$file_hash, $file_stat, $plugin_options) {
+    if (!$plugin_options->scanner_always_hash &&
+        isset($old_entry['size'], $old_entry['mtime']) &&
+        $old_entry['mtime'] == $file_stat['mtime']
+    ) {
+        return $old_entry['size'] == $file_stat['size'];
+    }
+    // Fall back to calculating hash
+    if (!isset($file_hash)) {
+        $file_hash = @hash_file('sha256', $full_path);
+        if ($file_hash === FALSE) {
+            error_log("_xiaodu_jsdelivr_scan_directory: Hash failed, " . $full_path);
+            return false;
+        }
+    }
+    return $file_hash == $old_entry['sha256'];
+}
+
 function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     xiaodu_jsdelivr_debug_log("START DIR SCAN $dir ");
     $dir_full_path = ABSPATH . $dir;
@@ -128,30 +154,31 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
             continue;
         }
         $file_hash = null;
-        // Check if file is unchanged
-        if (isset($old_data[$path])) {
-            $file_unchanged = false;
-            $old_entry = &$old_data[$path];
-            if (!$plugin_options->scanner_always_hash &&
-                isset($old_entry['size'], $old_entry['mtime']) &&
-                $old_entry['size'] == $file_stat['size'] && $old_entry['mtime'] == $file_stat['mtime']
-                // Actually, if file sizes differ, their contents are obviously different... But I'm too lazy to handle it
-            ) {
-                $file_unchanged = true;
-                // xiaodu_jsdelivr_debug_log("File not changed (quick check)", $path);
+        // Check recent failure records
+        $fail_record_key = '!' . $path;
+        if (isset($old_data[$fail_record_key])) {
+            $old_entry = $old_data[$fail_record_key];
+            if ($options['start_time'] > $old_entry['fail_time'] + 7200) {
+                // Failure records expired
+                unset($old_data[$fail_record_key]);
             } else {
-                // Fall back to calculating hash
-                $file_hash = @hash_file('sha256', $full_path);
-                if ($file_hash === FALSE) {
-                    error_log("_xiaodu_jsdelivr_scan_directory: Hash failed, " . $full_path);
+                $file_unchanged = xiaodu_jsdelivr_check_file_unchanged($old_entry, $full_path, $file_hash, $file_stat, $plugin_options);
+                if ($file_unchanged) {
+                    xiaodu_jsdelivr_debug_log('_xiaodu_jsdelivr_scan_directory: Skip recently failed file ', $full_path);
+                    $new_data[$fail_record_key] = $old_entry;
                     continue;
-                }
-                if ($file_hash == $old_entry['sha256']) {
-                    $file_unchanged = true;
-                    // xiaodu_jsdelivr_debug_log("File not changed (hashes match)", $path);
+                } else {
+                    if ($file_hash === false) {  // Hash failed
+                        continue;
+                    }
+                    unset($old_data[$fail_record_key]);
                 }
             }
-
+        }
+        // Check if file is unchanged
+        if (isset($old_data[$path])) {
+            $old_entry = &$old_data[$path];
+            $file_unchanged = xiaodu_jsdelivr_check_file_unchanged($old_entry, $full_path, $file_hash, $file_stat, $plugin_options);
             if ($file_unchanged) {
                 $new_entry = $old_entry;
                 $new_entry['version'] = $version;
@@ -160,10 +187,15 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 $new_entry['mtime'] = $file_stat['mtime'];
                 $new_data[$path] = $new_entry;
                 continue;
+            } else {
+                if ($file_hash === false) {  // Hash failed
+                    continue;
+                }
+                unset($old_data[$path]);
             }
         }
         // Hash file content if not already done
-        if ($file_hash === null) {
+        if (!isset($file_hash)) {
             $file_hash = @hash_file('sha256', $full_path);
             if ($file_hash === FALSE) {
                 error_log("_xiaodu_jsdelivr_scan_directory: Hash failed, " . $full_path);
@@ -172,12 +204,14 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
         }
         // Scan using hints
         $scan_result = NULL;
+        $remote_hash_timeout = false;
         if ($scan_hints) {
             foreach ($scan_hints as $hint => $skip_length) {
                 $concat_path = ($skip_length <= 0) ? $path : substr($path, $skip_length);
                 $scan_url = $hint . $concat_path;
                 $scan_hash = xiaodu_jsdelivr_hash_remote_url($options, $scan_url);
                 if ($scan_hash === false) {
+                    $remote_hash_timeout = true;
                     if (xiaodu_jsdelivr_check_scan_timeout($options)) {
                         xiaodu_jsdelivr_debug_log("SCAN TIME OUT $path");
                         return;
@@ -204,15 +238,16 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
                     $scan_url = "https://cdn.jsdelivr.net/{$api_res['type']}/{$api_res['name']}@{$api_res['version']}{$api_res['file']}";
                     $scan_hash = xiaodu_jsdelivr_hash_remote_url($options, $scan_url);
                     if ($scan_hash === false) {
+                        $remote_hash_timeout = true;
                         if (xiaodu_jsdelivr_check_scan_timeout($options)) {
                             xiaodu_jsdelivr_debug_log("SCAN TIME OUT $path");
                             return;
                         }
-                        continue;
-                    }
-                    xiaodu_jsdelivr_debug_log("LOOKUP $path [$file_hash] -> $scan_url [$scan_hash]");
-                    if ($scan_hash === $file_hash) {
-                        $scan_result = $scan_url;
+                    } else {
+                        xiaodu_jsdelivr_debug_log("LOOKUP $path [$file_hash] -> $scan_url [$scan_hash]");
+                        if ($scan_hash === $file_hash) {
+                            $scan_result = $scan_url;
+                        }
                     }
                 }
             }
@@ -228,8 +263,18 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 'url' => $scan_result
             );
             xiaodu_jsdelivr_debug_log("FOUND MATCH: $path -> $scan_result");
+        } else if (!$remote_hash_timeout) {
+            // When all hinted urls are missing or mismatched, but **not timed out**,
+            // add a failure record to avoid unnecessary attempts in a while.
+            $new_data[$fail_record_key] = array(
+                'sha256' => $file_hash,
+                'size' => $file_stat['size'],
+                'mtime' => $file_stat['mtime'],
+                'fail_time' => intval($options['start_time']),
+            );
+            xiaodu_jsdelivr_debug_log("ADD FAILURE RECORD: $path");
         }
-        if (xiaodu_jsdelivr_check_scan_timeout($options)) {
+        if (!$remote_hash_timeout && xiaodu_jsdelivr_check_scan_timeout($options)) {
             xiaodu_jsdelivr_debug_log("SCAN TIME OUT $dir");
             return;
         }
@@ -281,6 +326,11 @@ function xiaodu_jsdelivr_scan() {
     // Scan base WordPress files
     global $wp_version;
     $jsdelivr_wp_hint = "https://cdn.jsdelivr.net/gh/WordPress/WordPress@{$wp_version}/";
+    $stream_ctx = stream_context_create(array('http' => array(
+        'timeout' => 8,
+        'ignore_errors' => true,
+        'user_agent' => 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)',
+    )));
     $options = array(
         "old_data" => &$old_data,
         "new_data" => &$new_data,
@@ -289,7 +339,7 @@ function xiaodu_jsdelivr_scan() {
         "version_hint" => NULL,
         "start_time" => defined('WP_START_TIMESTAMP') ? WP_START_TIMESTAMP : $now,
         "timeout" => $timeout,
-        "stream_ctx" => stream_context_create(array('http' => array('timeout' => 8))),
+        "stream_ctx" => $stream_ctx,
         "is_timeout" => FALSE,
     );
     $scan_dir_list = array(
