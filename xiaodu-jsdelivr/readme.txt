@@ -12,3 +12,33 @@ Scan and serve static files from jsDelivr CDN (https://jsdelivr.com).
 
 == Description ==
 Scan and serve static files from jsDelivr CDN (https://jsdelivr.com).
+
+= How to use =
+1. Install and activate the plugin
+2. Wait for the initial scan(s) to complete
+3. The static file references on your admin area and frontend
+    will be replaced.
+
+= How it works =
+Explained in my [blog entry](https://s.du9l.com/u7yiP).
+
+== Frequently Asked Questions ==
+
+= The plugin won't scan =
+Please make sure that your WP-Cron is working,
+or look into alternative ways to trigger cron executions.
+
+= No references are replaced =
+Please wait for the scan to finish.
+The initial scan may take a while.
+Also make sure that your frontend cache plugin (e.g. WP Super Cache)
+is not serving stale pages.
+
+== Changelog ==
+
+= 1.1 =
+* Provide an options page with status display and two new options
+* Better scan timeout handling
+
+= 1.0 =
+* First version with working Scanner and Replacer.
