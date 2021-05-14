@@ -38,6 +38,18 @@ function xiaodu_jsdelivr_options_page_register() {
 
 add_action('admin_menu', 'xiaodu_jsdelivr_options_page_register');
 
+function xiaodu_jsdelivr_add_plugin_link( $links, $file ) {
+    global $xiaodu_jsdelivr_plugin_dir_path;
+    if ( $file === 'xiaodu-jsdelivr/xiaodu-jsdelivr.php' ) {
+        $url = admin_url( 'options-general.php?page=' . XIAODU_JSDELIVR_OPTIONS_PAGE_NAME );
+        $links = (array) $links;
+        $links[] = sprintf( '<a href="%s">%s</a>', esc_url($url), __( 'Settings' ) );
+    }
+    return $links;
+}
+
+add_filter( 'plugin_action_links', 'xiaodu_jsdelivr_add_plugin_link', 10, 2 );
+
 function xiaodu_jsdelivr_options_init() {
     $page_name = XIAODU_JSDELIVR_OPTIONS_PAGE_NAME;
     // Register a new setting
@@ -119,7 +131,7 @@ function xiaodu_jsdelivr_status_data_cb( $args ) {
     $data = get_option('xiaodu_jsdelivr_data');
     $data_size = is_array($data) ? count($data) : 0;
     echo "<p>Scan data size: $data_size ";
-    submit_button(__('Clear data'), 'small', XiaoduJsdelivrOptions::$options_key . '[clear_data]', false);
+    submit_button('Clear data - CAUTION: This will clear all scan results!', 'small', XiaoduJsdelivrOptions::$options_key . '[clear_data]', false);
     echo '</p>';
 }
 
@@ -137,7 +149,7 @@ function xiaodu_jsdelivr_status_scanner_cb( $args ) {
         $cur_scan_time = intval(time() - $cur_scan);
         echo "<p>SCANNING - Time since current scan started: $cur_scan_time ";
     }
-    submit_button(__('Start new scan'), 'small', XiaoduJsdelivrOptions::$options_key . '[scan_now]', false);
+    submit_button('Start new scan', 'small', XiaoduJsdelivrOptions::$options_key . '[scan_now]', false);
     echo '</p>';
 }
 
@@ -198,7 +210,7 @@ function xiaodu_jsdelivr_options_page() {
             // output setting sections and their fields
             do_settings_sections( XIAODU_JSDELIVR_OPTIONS_PAGE_NAME );
             // output save settings button
-            submit_button( __( 'Save Settings' ) );
+            submit_button( __( 'Save Changes' ) );
             ?>
         </form>
     </div>
@@ -209,12 +221,12 @@ function xiaodu_jsdelivr_options_sanitize_filter( $value ) {
     if (isset($value['clear_data'])) {
         unset($value['clear_data']);
         delete_option('xiaodu_jsdelivr_data');
-        add_settings_error('xiaodu_jsdelivr_messages', 'clear_data', __('Data cleared...'), 'info');
+        add_settings_error('xiaodu_jsdelivr_messages', 'clear_data', 'Data cleared...', 'info');
     }
     if (isset($value['scan_now'])) {
         unset($value['scan_now']);
         xiaodu_jsdelivr_reschedule(true, 0);
-        add_settings_error('xiaodu_jsdelivr_messages', 'scan_now', __('New scan will start soon...'), 'info');
+        add_settings_error('xiaodu_jsdelivr_messages', 'scan_now', 'New scan will start soon...', 'info');
     }
     $options = XiaoduJsdelivrOptions::inst();
     $value = $options->sanitize_post_option($value);
