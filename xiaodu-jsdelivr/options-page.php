@@ -90,6 +90,22 @@ function xiaodu_jsdelivr_options_init() {
     );
 
     add_settings_field(
+        '_status_scan_result',
+        'Last scan result',
+        'xiaodu_jsdelivr_status_scan_result_cb',
+        $page_name,
+        $status_section_name
+    );
+
+    add_settings_field(
+        '_status_scan_fail',
+        'Last scan failed paths',
+        'xiaodu_jsdelivr_status_scan_fail_cb',
+        $page_name,
+        $status_section_name
+    );
+
+    add_settings_field(
         'scanner_always_hash',
         'Always hash in Scanner',
         'xiaodu_jsdelivr_option_boolean_cb',
@@ -151,6 +167,41 @@ function xiaodu_jsdelivr_status_scanner_cb( $args ) {
     }
     submit_button('Start new scan', 'small', XiaoduJsdelivrOptions::$options_key . '[scan_now]', false);
     echo '</p>';
+}
+
+function xiaodu_jsdelivr_status_scan_result_cb( $args ) {
+    $data = get_option('xiaodu_jsdelivr_data');
+    if (is_array($data) && isset($data['*result*'], $data['*result*']['is_timeout'])) {
+        $result = $data['*result*']['is_timeout'] ? 'Timed out' : 'Finished in time!';
+    } else {
+        $result = 'Unknown';
+    }
+    echo "<p>$result</p>";
+}
+
+function xiaodu_jsdelivr_status_scan_fail_cb( $args ) {
+    $data = get_option('xiaodu_jsdelivr_data');
+    if (is_array($data) && isset($data['*result*'], $data['*result*']['fail_records'])) {
+        $fail_records = $data['*result*']['fail_records'];
+        $fail_count = count($fail_records);
+        if ($fail_count == 0) {
+            echo "<p>No failures!</p>";
+            return;
+        }
+        echo "<p>Total: $fail_count</p><ul>";
+        $display_limit = 10;
+        foreach ($fail_records as $path) {
+            if ($display_limit == 0) {
+                echo '<li>...</li>';
+                break;
+            }
+            echo "<li>" . esc_html($path) . "</li>";
+            $display_limit --;
+        }
+        echo "</ul>";
+    } else {
+        echo "<p>Unknown</p>";
+    }
 }
 
 function xiaodu_jsdelivr_option_boolean_cb( $args ) {

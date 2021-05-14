@@ -166,6 +166,7 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 if ($file_unchanged) {
                     xiaodu_jsdelivr_debug_log('_xiaodu_jsdelivr_scan_directory: Skip recently failed file ', $full_path);
                     $new_data[$fail_record_key] = $old_entry;
+                    $options['fail_records'][] = $path;
                     continue;
                 } else {
                     if ($file_hash === false) {  // Hash failed
@@ -272,6 +273,7 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 'mtime' => $file_stat['mtime'],
                 'fail_time' => intval($options['start_time']),
             );
+            $options['fail_records'][] = $path;
             xiaodu_jsdelivr_debug_log("ADD FAILURE RECORD: $path");
         }
         if (!$remote_hash_timeout && xiaodu_jsdelivr_check_scan_timeout($options)) {
@@ -341,6 +343,7 @@ function xiaodu_jsdelivr_scan() {
         "timeout" => $timeout,
         "stream_ctx" => $stream_ctx,
         "is_timeout" => FALSE,
+        "fail_records" => array(),
     );
     $scan_dir_list = array(
         'wp-admin',
@@ -442,6 +445,10 @@ function xiaodu_jsdelivr_scan() {
     if ($options['is_timeout']) {
         $new_data = array_replace($old_data, $new_data);
     }
+    $new_data['*result*'] = array(
+        'fail_records' => $options['fail_records'],
+        'is_timeout' => $options['is_timeout'],
+    );
     update_option('xiaodu_jsdelivr_data', $new_data);
     delete_transient('xiaodu_jsdelivr_lock');
     xiaodu_jsdelivr_debug_log("FINISH SCAN $now, data size = " . count($new_data));
