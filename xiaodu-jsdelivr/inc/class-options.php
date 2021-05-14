@@ -105,4 +105,10 @@ class XiaoduJsdelivrOptions
      * @var int
      */
     public $scanner_timeout = 0;
+
+    /**
+     * Randomized scan order
+     * @var bool
+     */
+    public $scanner_randomized = false;
 }

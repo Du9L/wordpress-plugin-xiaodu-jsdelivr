@@ -128,6 +128,9 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     $version = $options['version'];
     $version_hint = $options['version_hint'];
     $plugin_options = XiaoduJsdelivrOptions::inst();
+    if ($plugin_options->scanner_randomized) {
+        shuffle($dir_contents);
+    }
     foreach ($dir_contents as $name) {
         $full_path = $dir_full_path . '/' . $name;
         $path = $dir . '/' . $name;

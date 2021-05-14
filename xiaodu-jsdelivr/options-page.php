@@ -129,6 +129,18 @@ function xiaodu_jsdelivr_options_init() {
             'desc' => "Timeout in seconds for single Scanner run (Default: 0, use system time limit [$sys_time_limit])",
         )
     );
+
+    add_settings_field(
+        'scanner_randomized',
+        'Randomized scan order',
+        'xiaodu_jsdelivr_option_boolean_cb',
+        $page_name,
+        $default_section_name,
+        array(
+            'label_for' => 'scanner_randomized',
+            'desc' => 'Scan directory content in random order (Default: off, use filesystem default order)',
+        )
+    );
 }
 
 add_action('admin_init', 'xiaodu_jsdelivr_options_init');
