@@ -278,6 +278,9 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
             );
             $options['fail_records'][] = $path;
             xiaodu_jsdelivr_debug_log("ADD FAILURE RECORD: $path");
+        } else {
+            // Found no result with a remote timeout, can try again later
+            $options['is_file_timeout'] = true;
         }
         if (!$remote_hash_timeout && xiaodu_jsdelivr_check_scan_timeout($options)) {
             xiaodu_jsdelivr_debug_log("SCAN TIME OUT $dir");
@@ -346,6 +349,7 @@ function xiaodu_jsdelivr_scan() {
         "timeout" => $timeout,
         "stream_ctx" => $stream_ctx,
         "is_timeout" => FALSE,
+        "is_file_timeout" => false,
         "fail_records" => array(),
     );
     $scan_dir_list = array(
@@ -445,18 +449,19 @@ function xiaodu_jsdelivr_scan() {
         error_log("_xiaodu_jsdelivr_scan: Lock was stolen, " . print_r($lock, TRUE));
         return;
     }
-    if ($options['is_timeout']) {
+    $scan_timeout_try_again = $options['is_timeout'] || $options['is_file_timeout'];
+    if ($scan_timeout_try_again) {
         $new_data = array_replace($old_data, $new_data);
     }
     $new_data['*result*'] = array(
         'fail_records' => $options['fail_records'],
-        'is_timeout' => $options['is_timeout'],
+        'is_timeout' => $scan_timeout_try_again,
     );
     update_option('xiaodu_jsdelivr_data', $new_data);
     delete_transient('xiaodu_jsdelivr_lock');
     xiaodu_jsdelivr_debug_log("FINISH SCAN $now, data size = " . count($new_data));
-    if ($options['is_timeout']) {
+    if ($scan_timeout_try_again) {
         $next_scan = xiaodu_jsdelivr_reschedule(false, 1);
-        xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT, WILL SCAN AGAIN $next_scan");
+        xiaodu_jsdelivr_debug_log("THIS SCAN TIMED OUT ({$options['is_timeout']},{$options['is_file_timeout']}), WILL SCAN AGAIN $next_scan");
     }
 }
