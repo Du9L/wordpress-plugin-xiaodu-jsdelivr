@@ -4,7 +4,7 @@ Tags: jsdelivr,cdn,static
 Requires at least: 5.3
 Tested up to: 5.7
 Requires PHP: 7.2
-Stable tag: 1.2.1
+Stable tag: 1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,9 @@ Please wait for the scan to finish. The initial scan may take a while.
 Also make sure that your frontend cache plugin (e.g. WP Super Cache) is not serving stale pages.
 
 == Changelog ==
+
+= 1.3 =
+* Add "Scan API", an optional hosted service to assist and accelerate the scanning process
 
 = 1.2.1 =
 * When a file cannot be matched with a remote timeout, try again soon

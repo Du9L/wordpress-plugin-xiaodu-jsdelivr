@@ -53,6 +53,8 @@ class XiaoduJsdelivrOptions
                 $this->{$k} = $exist_in_options ? boolval($options[$k]) : false;
             } else if (is_int($v)) {
                 $this->{$k} = $exist_in_options ? intval($options[$k]) : 0;
+            } else if (is_string($v)) {
+                $this->{$k} = $exist_in_options ? strval($options[$k]) : '';
             } else {
                 xiaodu_jsdelivr_debug_log('Unsupported option type: ' . gettype($v));
             }
@@ -75,6 +77,8 @@ class XiaoduJsdelivrOptions
                 $option_value[$k] = $exist_in_value ? $option_value[$k] == '1' : false;
             } else if (is_int($v)) {
                 $option_value[$k] = $exist_in_value ? intval($option_value[$k]) : 0;
+            } else if (is_string($v)) {
+                $option_value[$k] = $exist_in_value ? strval($option_value[$k]) : '';
             } else {
                 xiaodu_jsdelivr_debug_log('Unsupported option type: ' . gettype($v));
             }
@@ -111,4 +115,22 @@ class XiaoduJsdelivrOptions
      * @var bool
      */
     public $scanner_randomized = false;
+
+    /**
+     * Enable API
+     * @var bool
+     */
+    public $e_api_enabled = false;
+
+    /**
+     * API key
+     * @var string
+     */
+    public $e_api_key = '';
+
+    /**
+     * API secret
+     * @var string
+     */
+    public $e_api_secret = '';
 }

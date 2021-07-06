@@ -55,24 +55,15 @@ function xiaodu_jsdelivr_options_init() {
     // Register a new setting
     register_setting( $page_name, XiaoduJsdelivrOptions::$options_key );
 
-    // Register a new section
+    // Status section
     $status_section_name = 'xiaodu_jsdelivr_status';
     add_settings_section(
-        'xiaodu_jsdelivr_status',
+        $status_section_name,
         'Status',
         'xiaodu_jsdelivr_options_status_section_cb',
         $page_name
     );
 
-    $default_section_name = 'xiaodu_jsdelivr_options';
-    add_settings_section(
-        $default_section_name,
-        'Options',
-        'xiaodu_jsdelivr_options_default_section_cb',
-        $page_name
-    );
-
-    // Register a new field
     add_settings_field(
         '_status_data',
         'Data',
@@ -103,6 +94,15 @@ function xiaodu_jsdelivr_options_init() {
         'xiaodu_jsdelivr_status_scan_fail_cb',
         $page_name,
         $status_section_name
+    );
+
+    // Options section
+    $default_section_name = 'xiaodu_jsdelivr_options';
+    add_settings_section(
+        $default_section_name,
+        'Options',
+        'xiaodu_jsdelivr_options_default_section_cb',
+        $page_name
     );
 
     add_settings_field(
@@ -141,6 +141,51 @@ function xiaodu_jsdelivr_options_init() {
             'desc' => 'Scan directory content in random order (Default: off, use filesystem default order)',
         )
     );
+
+    // API section
+    $api_section_name = 'xiaodu_jsdelivr_api';
+    add_settings_section(
+        $api_section_name,
+        'Scan API',
+        'xiaodu_jsdelivr_options_api_section_cb',
+        $page_name
+    );
+
+    add_settings_field(
+        'e_api_enabled',
+        'Enable API',
+        'xiaodu_jsdelivr_option_boolean_cb',
+        $page_name,
+        $api_section_name,
+        array(
+            'label_for' => 'e_api_enabled',
+            'desc' => 'Enable scan API service'
+        )
+    );
+
+    add_settings_field(
+        'e_api_key',
+        'API Key',
+        'xiaodu_jsdelivr_option_string_cb',
+        $page_name,
+        $api_section_name,
+        array(
+            'label_for' => 'e_api_key',
+            'desc' => 'Your API key generated in the manager',
+        )
+    );
+
+    add_settings_field(
+        'e_api_secret',
+        'API Secret',
+        'xiaodu_jsdelivr_option_string_cb',
+        $page_name,
+        $api_section_name,
+        array(
+            'label_for' => 'e_api_secret',
+            'desc' => 'Your API secret generated in the manager',
+        )
+    );
 }
 
 add_action('admin_init', 'xiaodu_jsdelivr_options_init');
@@ -155,11 +200,27 @@ function xiaodu_jsdelivr_options_status_section_cb( $args ) {
 
 }
 
+function xiaodu_jsdelivr_options_api_section_cb( $args ) {
+    echo <<<EOF
+    <p>
+    Scan API is an <b>optional</b> hosted service that uses pre-calculated data to assist and accelerate the scanning process.<br />
+    If you want to use this service, you can generate an API key and secret pair from the
+    <a href="https://s.du9l.com/xjapi" target="_blank" rel="external noopener"><b>API Manager</b></a>
+    and fill it in below.<br />
+    <i>Note: When you use the API service, you agree that your website's URL and WordPress,
+    plugins and themes information will be uploaded and logged by the service provider.
+    If you keep this feature disabled, no requests will be made to the service.</i>
+    </p>
+EOF;
+}
+
 function xiaodu_jsdelivr_status_data_cb( $args ) {
     $data = get_option('xiaodu_jsdelivr_data');
     $data_size = is_array($data) ? count($data) : 0;
     echo "<p>Scan data size: $data_size ";
-    submit_button('Clear data - CAUTION: This will clear all scan results!', 'small', XiaoduJsdelivrOptions::$options_key . '[clear_data]', false);
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        submit_button('Clear data - CAUTION: This will clear all scan results!', 'small', XiaoduJsdelivrOptions::$options_key . '[clear_data]', false);
+    }
     echo '</p>';
 }
 
@@ -246,6 +307,26 @@ function xiaodu_jsdelivr_option_integer_cb( $args ) {
     ?>
     <input
             type="number" value="<?php echo esc_attr($current_value); ?>"
+            id="<?php echo $option_name_esc_attr; ?>"
+            name="<?php echo esc_attr( $options_key ); ?>[<?php echo $option_name_esc_attr; ?>]"
+    />
+    <span class="description">
+        <label for="<?php echo $option_name_esc_attr; ?>">
+            <?php esc_html_e( $args['desc'] ); ?>
+        </label>
+    </span>
+    <?php
+}
+
+function xiaodu_jsdelivr_option_string_cb( $args ) {
+    $options_key = XiaoduJsdelivrOptions::$options_key;
+    $options = XiaoduJsdelivrOptions::inst();
+    $option_name = $args['label_for'];
+    $option_name_esc_attr = esc_attr($option_name);
+    $current_value = property_exists($options, $option_name) ? $options->{$option_name} : '';
+    ?>
+    <input
+            type="text" value="<?php echo esc_attr($current_value); ?>"
             id="<?php echo $option_name_esc_attr; ?>"
             name="<?php echo esc_attr( $options_key ); ?>[<?php echo $option_name_esc_attr; ?>]"
     />

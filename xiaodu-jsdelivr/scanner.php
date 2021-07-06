@@ -25,6 +25,80 @@ if ( ! defined( 'ABSPATH' ) ) { die( 'Invalid request.' ); }
 
 DEFINE('XIAODU_JSDELIVR_CRON_HOOK', 'xiaodu_jsdelivr_cron');
 
+// Utility function to fetch remote URL with compression
+
+function xiaodu_jsdelivr_get_remote_content($url, $timeout = null, $auth = null, $post = null) {
+    if (function_exists('curl_setopt') && curl_version()['version_number'] >= 0x070A05) {
+        // Use cURL and all its supported encodings
+        $curl = curl_init($url);
+        curl_setopt($curl, CURLOPT_ENCODING, '');
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($curl, CURLOPT_USERAGENT, 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)');
+        if ($timeout !== null) {
+            curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
+        }
+        if ($auth !== null) {
+            curl_setopt($curl, CURLOPT_USERPWD, $auth);
+        }
+        $headers = array();
+        if ($post !== null) {
+            curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'POST');
+            if (is_string($post)) {
+                curl_setopt($curl, CURLOPT_POSTFIELDS, $post);
+                $headers []= 'Content-Type: application/json';
+                $headers []= 'Content-Length: ' . strlen($post);
+            }
+        }
+        if ($headers) {
+            curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+        }
+        $data = curl_exec($curl);
+        curl_close($curl);
+        return $data;
+    } else {
+        // Use stream and gzip (if supported)
+        $stream_opt = array('http' => array(
+            'ignore_errors' => true,
+            'user_agent' => 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)',
+            'header' => array(),
+        ));
+        if ($timeout !== null) {
+            $stream_opt['http']['timeout'] = $timeout;
+        }
+        if ($auth !== null) {
+            $stream_opt['http']['header'][] = 'Authorization: Basic ' . base64_encode($auth);
+        }
+        if (function_exists('zlib_decode')) {
+            $stream_opt['http']['header'][] = 'Accept-Encoding: gzip';
+        }
+        if ($post !== null) {
+            $stream_opt['http']['method'] = 'POST';
+            if (is_string($post)) {
+                $stream_opt['http']['content'] = $post;
+                $stream_opt['http']['header'][]= 'Content-Type: application/json';
+                $stream_opt['http']['header'][]= 'Content-Length: ' . strlen($post);
+            }
+        }
+        $stream_ctx = stream_context_create($stream_opt);
+        $data = file_get_contents($url, false, $stream_ctx);
+        if ($data === FALSE) {
+            return $data;
+        }
+        $encoding = null;
+        foreach ($http_response_header as $line) {
+            if (strtolower(substr($line, 0, 5)) == 'http/') {
+                $encoding = null;
+            } else if (strtolower(substr($line, 0, 17)) == 'content-encoding:') {
+                $encoding = trim(substr($line, 17));
+            }
+        }
+        if ($encoding !== null && stripos($encoding, 'gzip') !== false) {
+            $data = zlib_decode($data);
+        }
+        return $data;
+    }
+}
+
 // Activation and deactivation hooks
 
 function xiaodu_jsdelivr_reschedule($steal_lock = false, $delay = 0) {
@@ -49,6 +123,7 @@ function xiaodu_jsdelivr_deactivation()
 
 function xiaodu_jsdelivr_uninstall() {
     delete_transient('xiaodu_jsdelivr_lock');
+    delete_transient('xiaodu_jsdelivr_api_resp');
     delete_option('xiaodu_jsdelivr_data');
     delete_option(XiaoduJsdelivrOptions::$options_key);
 }
@@ -75,8 +150,8 @@ function xiaodu_jsdelivr_check_scan_timeout(&$options) {
     return false;
 }
 
-function xiaodu_jsdelivr_hash_remote_url(&$options, $url) {
-    $content = @file_get_contents($url, false, $options['stream_ctx']);
+function xiaodu_jsdelivr_hash_remote_url($options, $url) {
+    $content = xiaodu_jsdelivr_get_remote_content($url, $options['fetch_timeout']);
     if ($content === false) {
         error_log("xiaodu_jsdelivr_hash_remote_url: Get remote url failed, " . $url);
         return false;
@@ -125,6 +200,7 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     $old_data = &$options['old_data'];
     $new_data = &$options['new_data'];
     $scan_hints = $options['scan_hints'];
+    $api_data = $options['api_data'];
     $version = $options['version'];
     $version_hint = $options['version_hint'];
     $plugin_options = XiaoduJsdelivrOptions::inst();
@@ -206,6 +282,22 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
                 continue;
             }
         }
+        // Try to match against scan API results
+        if ($api_data !== NULL && isset($api_data[$path])) {
+            $api_entry = $api_data[$path];
+            if (count($api_entry) >= 2 && $api_entry[0] == $file_hash) {
+                $new_data[$path] = array(
+                    'version' => $version,
+                    'version_hint' => $version_hint,
+                    'sha256' => $file_hash,
+                    'size' => $file_stat['size'],
+                    'mtime' => $file_stat['mtime'],
+                    'url' => $api_entry[1],
+                );
+                xiaodu_jsdelivr_debug_log("API MATCH: $path -> {$api_entry[1]}");
+                continue;
+            }
+        }
         // Scan using hints
         $scan_result = NULL;
         $remote_hash_timeout = false;
@@ -232,7 +324,7 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
         // Fallback using hash
         if ($scan_result === NULL) {
             $api_url = 'https://data.jsdelivr.com/v1/lookup/hash/' . $file_hash;
-            $api_res = @file_get_contents($api_url);
+            $api_res = xiaodu_jsdelivr_get_remote_content($api_url, $options['fetch_timeout']);
             if ($api_res !== FALSE) {
                 $api_res = @json_decode($api_res, TRUE, 2);
                 if ($api_res !== NULL && isset($api_res['type'], $api_res['name'], $api_res['version'], $api_res['file'])) {
@@ -289,6 +381,40 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     }
 }
 
+function xiaodu_jsdelivr_get_scan_api_data() {
+    $plugin_options = XiaoduJsdelivrOptions::inst();
+    if (!$plugin_options->e_api_enabled || !$plugin_options->e_api_key || !$plugin_options->e_api_secret) {
+        // When the feature is disabled, don't make any request to the API service!!
+        return null;
+    }
+    $cached_resp = get_transient('xiaodu_jsdelivr_api_resp');
+    if ($cached_resp !== FALSE) {
+        return $cached_resp;
+    }
+    // Send API request using the credentials above
+    $auth = "{$plugin_options->e_api_key}:{$plugin_options->e_api_secret}";
+    global $wp_version;
+    $body = json_encode(array(
+        'site_url' => site_url(),
+        'wp_ver' => $wp_version,
+        // TODO: Upload plugin and theme versions when API supports them
+    ));
+    $api_url = 'https://xiaodu-jsdelivr-api.du9l.com/api/enlighten';
+    $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, $body);
+    if ($resp === false) {
+        xiaodu_jsdelivr_debug_log("API ACCESS FAILED ", $resp);
+        return null;
+    }
+    $resp_body = json_decode($resp, TRUE);
+    if ($resp_body !== null && isset($resp_body['data'])) {
+        set_transient('xiaodu_jsdelivr_api_resp', $resp_body, 23 * 3600);
+        xiaodu_jsdelivr_debug_log("API ACCESS SUCCESS, data size = ", count($resp_body['data']));
+    } else {
+        xiaodu_jsdelivr_debug_log("API INVALID RESPONSE ", $resp_body);
+    }
+    return $resp_body;
+}
+
 function xiaodu_jsdelivr_scan() {
     // Check and set lock
     $now = microtime(true);
@@ -331,23 +457,27 @@ function xiaodu_jsdelivr_scan() {
      */
     $timeout = max($timeout - 10, 10);
 
+    // Try to access the scan API (or use cached response) if it's enabled
+    $api_resp = xiaodu_jsdelivr_get_scan_api_data();
+    if ($api_resp !== NULL && isset($api_resp['data'])) {
+        $api_data = $api_resp['data'];
+    } else {
+        $api_data = null;
+    }
+
     // Scan base WordPress files
     global $wp_version;
     $jsdelivr_wp_hint = "https://cdn.jsdelivr.net/gh/WordPress/WordPress@{$wp_version}/";
-    $stream_ctx = stream_context_create(array('http' => array(
-        'timeout' => 8,
-        'ignore_errors' => true,
-        'user_agent' => 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)',
-    )));
     $options = array(
         "old_data" => &$old_data,
         "new_data" => &$new_data,
         "scan_hints" => array($jsdelivr_wp_hint => 0),
+        "api_data" => $api_data,
         "version" => $wp_version,
         "version_hint" => NULL,
         "start_time" => defined('WP_START_TIMESTAMP') ? WP_START_TIMESTAMP : $now,
         "timeout" => $timeout,
-        "stream_ctx" => $stream_ctx,
+        "fetch_timeout" => 8,
         "is_timeout" => FALSE,
         "is_file_timeout" => false,
         "fail_records" => array(),
