@@ -124,6 +124,7 @@ function xiaodu_jsdelivr_deactivation()
 function xiaodu_jsdelivr_uninstall() {
     delete_transient('xiaodu_jsdelivr_lock');
     delete_transient('xiaodu_jsdelivr_api_resp');
+    delete_transient('xiaodu_jsdelivr_api_result');
     delete_option('xiaodu_jsdelivr_data');
     delete_option(XiaoduJsdelivrOptions::$options_key);
 }
@@ -381,6 +382,23 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     }
 }
 
+function xiaodu_jsdelivr_record_api_result($resp_body) {
+    if ($resp_body && isset($resp_body['data'])) {
+        $result = array(
+            'success' => true,
+            'time' => time(),
+        );
+    } else {
+        $result = array(
+            'success' => false,
+            'time' => time(),
+            'code' => isset($resp_body['_code']) ? intval($resp_body['_code']) : null,
+            'error' => isset($resp_body['_error']) ? htmlspecialchars(strval($resp_body['_error'])) : null,
+        );
+    }
+    set_transient('xiaodu_jsdelivr_api_result', $result, 24 * 3600);
+}
+
 function xiaodu_jsdelivr_get_scan_api_data() {
     $plugin_options = XiaoduJsdelivrOptions::inst();
     if (!$plugin_options->e_api_enabled || !$plugin_options->e_api_key || !$plugin_options->e_api_secret) {
@@ -402,6 +420,7 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     $api_url = 'https://xiaodu-jsdelivr-api.du9l.com/api/enlighten';
     $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, $body);
     if ($resp === false) {
+        xiaodu_jsdelivr_record_api_result(array('_error' => 'NETWORK ERROR'));
         xiaodu_jsdelivr_debug_log("API ACCESS FAILED ", $resp);
         return null;
     }
@@ -412,6 +431,7 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     } else {
         xiaodu_jsdelivr_debug_log("API INVALID RESPONSE ", $resp_body);
     }
+    xiaodu_jsdelivr_record_api_result($resp_body);
     return $resp_body;
 }
 

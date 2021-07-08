@@ -186,6 +186,14 @@ function xiaodu_jsdelivr_options_init() {
             'desc' => 'Your API secret generated in the manager',
         )
     );
+
+    add_settings_field(
+        '_e_api_result',
+        'API Access Result',
+        'xiaodu_jsdelivr_api_result_cb',
+        $page_name,
+        $api_section_name
+    );
 }
 
 add_action('admin_init', 'xiaodu_jsdelivr_options_init');
@@ -282,6 +290,21 @@ function xiaodu_jsdelivr_status_scan_fail_cb( $args ) {
     } else {
         echo "<p>Unknown</p>";
     }
+}
+
+function xiaodu_jsdelivr_api_result_cb( $args ) {
+    $result = get_transient('xiaodu_jsdelivr_api_result');
+    if (!$result) {
+        $result_text = 'Unknown (not accessed recently)';
+    } else {
+        $time_diff = time() - $result['time'];
+        $success = $result['success'] ? 'Success' : 'Failed';
+        $result_text = "$time_diff seconds ago - $success";
+        if (!$result['success']) {
+            $result_text .= "; Code: {$result['code']}; Error: {$result['error']}";
+        }
+    }
+    echo "<p>$result_text</p>";
 }
 
 function xiaodu_jsdelivr_option_boolean_cb( $args ) {
