@@ -59,7 +59,7 @@ function xiaodu_jsdelivr_options_init() {
     $status_section_name = 'xiaodu_jsdelivr_status';
     add_settings_section(
         $status_section_name,
-        'Status',
+        'Scan Status',
         'xiaodu_jsdelivr_options_status_section_cb',
         $page_name
     );
@@ -100,7 +100,7 @@ function xiaodu_jsdelivr_options_init() {
     $default_section_name = 'xiaodu_jsdelivr_options';
     add_settings_section(
         $default_section_name,
-        'Options',
+        'Plugin Options',
         'xiaodu_jsdelivr_options_default_section_cb',
         $page_name
     );
@@ -207,10 +207,17 @@ function xiaodu_jsdelivr_options_api_section_cb( $args ) {
     If you want to use this service, you can generate an API key and secret pair from the
     <a href="https://s.du9l.com/xjapi" target="_blank" rel="external noopener"><b>API Manager</b></a>
     and fill it in below.<br />
-    <i>Note: When you use the API service, you agree that your website's URL and WordPress,
-    plugins and themes information will be uploaded and logged by the service provider.
-    If you keep this feature disabled, no requests will be made to the service.</i>
+    Details can be found in <a href="https://s.du9l.com/RKimP" target="_blank" rel="external noopener">this blog post</a>.<br />
+    <em>As of version 1.3, the plugin only retrieves and handles results from the API service about WordPress base files.
+    The plugin itself can still scan plugin and theme files directly.</em>
     </p>
+    <h3>&gt;&gt; Data usage and privacy</h3>
+    <p>
+    When you use the API service, you agree that your website's URL and WordPress,
+    plugins and themes information will be uploaded and logged by the service provider.<br />
+    If you keep this feature disabled, no requests will be made to the service.
+    </p>
+    <h3>&gt;&gt; Options</h3>
 EOF;
 }
 
