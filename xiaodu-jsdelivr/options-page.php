@@ -142,6 +142,20 @@ function xiaodu_jsdelivr_options_init() {
         )
     );
 
+    add_settings_field(
+        'replacer_auto_minified',
+        'Replacer use minified addresses',
+        'xiaodu_jsdelivr_option_boolean_cb',
+        $page_name,
+        $default_section_name,
+        array(
+            'label_for' => 'replacer_auto_minified',
+            'desc' => 'When replacing local references, always use minified versions of JS and CSS files
+            - Do NOT use with script / style integrity tags!
+            (Default: off, use originally referenced files)',
+        )
+    );
+
     // API section
     $api_section_name = 'xiaodu_jsdelivr_api';
     add_settings_section(
@@ -228,8 +242,8 @@ function xiaodu_jsdelivr_options_api_section_cb( $args ) {
     <a href="https://s.du9l.com/xjapi" target="_blank" rel="external noopener"><b>API Manager</b></a>
     and fill it in below.<br />
     Details can be found in <a href="https://s.du9l.com/RKimP" target="_blank" rel="external noopener">this blog post</a>.<br />
-    <em>As of version 1.3, the plugin only retrieves and handles results from the API service about WordPress base files.
-    The plugin itself can still scan plugin and theme files directly.</em>
+    <em>This version uploads WordPress base and theme versions to the API service for matching.
+    The plugin itself can still scan plugin files directly.</em>
     </p>
     <h3>&gt;&gt; Data usage and privacy</h3>
     <p>

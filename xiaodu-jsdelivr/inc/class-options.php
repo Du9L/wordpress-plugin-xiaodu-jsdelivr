@@ -117,6 +117,12 @@ class XiaoduJsdelivrOptions
     public $scanner_randomized = false;
 
     /**
+     * Replacer use minified addresses
+     * @var bool
+     */
+    public $replacer_auto_minified = false;
+
+    /**
      * Enable API
      * @var bool
      */

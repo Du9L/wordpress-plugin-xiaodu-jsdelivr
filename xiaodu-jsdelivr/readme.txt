@@ -34,10 +34,17 @@ Please wait for the scan to finish. The initial scan may take a while.
 
 Also make sure that your frontend cache plugin (e.g. WP Super Cache) is not serving stale pages.
 
+= What is "Scan API"? =
+It is an optional hosted service, using pre-calculated scan results to accelerate the scanning process.
+See my [blog post](https://s.du9l.com/RKimP) for details.
+
+If you leave the toggle unchecked, nothing will be sent to the service.
+
 == Changelog ==
 
 = 1.4 =
 * Add theme version upload support for Scan API
+* Add an option for Replacer to use minified versions of JS / CSS files
 
 = 1.3 =
 * Add "Scan API", an optional hosted service to assist and accelerate the scanning process

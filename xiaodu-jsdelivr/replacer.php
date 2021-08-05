@@ -65,6 +65,28 @@ function xiaodu_jsdelivr_global_data_loader() {
     return $xiaodu_jsdelivr_data;
 }
 
+function xiaodu_jsdelivr_auto_minify_url($url) {
+    // Check url is from jsDelivr
+    if (strncmp($url, 'https://cdn.jsdelivr.net/', strlen('https://cdn.jsdelivr.net/')) !== 0) {
+        return $url;
+    }
+    // Check extension
+    $last_dot = strrpos($url, '.');
+    if ($last_dot === false || $last_dot < 4) {
+        return $url;
+    }
+    $ext = strtolower(substr($url, $last_dot + 1));
+    if ($ext !== 'js' && $ext !== 'css') {
+        return $url;
+    }
+    // Check if already minified
+    if (strtolower(substr($url, $last_dot - 4, 4)) === '.min') {
+        return $url;
+    }
+    // Construct minified URL
+    return substr($url, 0, $last_dot) . '.min.' . $ext;
+}
+
 function xiaodu_jsdelivr_url_replacer($src) {
     $data = xiaodu_jsdelivr_global_data_loader();
     if (!$data) {
@@ -130,7 +152,12 @@ function xiaodu_jsdelivr_url_replacer($src) {
         return $src;
     }
     // Version matches, replace src with scanned URL
-    return $entry['url'];
+    $url = $entry['url'];
+    $plugin_options = XiaoduJsdelivrOptions::inst();
+    if ($plugin_options->replacer_auto_minified) {
+        $url = xiaodu_jsdelivr_auto_minify_url($url);
+    }
+    return $url;
 }
 
 add_filter( 'script_loader_src', 'xiaodu_jsdelivr_url_replacer', 20, 1 );
