@@ -50,7 +50,7 @@ class XiaoduJsdelivrOptions
         foreach ($vars as $k => $v) {
             $exist_in_options = array_key_exists($k, $options);
             if (is_bool($v)) {
-                $this->{$k} = $exist_in_options ? boolval($options[$k]) : false;
+                $this->{$k} = $exist_in_options && $options[$k];
             } else if (is_int($v)) {
                 $this->{$k} = $exist_in_options ? intval($options[$k]) : 0;
             } else if (is_string($v)) {
@@ -74,7 +74,7 @@ class XiaoduJsdelivrOptions
         foreach ($vars as $k => $v) {
             $exist_in_value = array_key_exists($k, $option_value);
             if (is_bool($v)) {
-                $option_value[$k] = $exist_in_value ? $option_value[$k] == '1' : false;
+                $option_value[$k] = $exist_in_value && $option_value[$k] == '1';
             } else if (is_int($v)) {
                 $option_value[$k] = $exist_in_value ? intval($option_value[$k]) : 0;
             } else if (is_string($v)) {
@@ -133,4 +133,10 @@ class XiaoduJsdelivrOptions
      * @var string
      */
     public $e_api_secret = '';
+
+    /**
+     * Disable sending themes
+     * @var bool
+     */
+    public $e_api_disable_themes = false;
 }

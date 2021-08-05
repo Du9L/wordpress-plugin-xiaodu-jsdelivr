@@ -411,12 +411,54 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     }
     // Send API request using the credentials above
     $auth = "{$plugin_options->e_api_key}:{$plugin_options->e_api_secret}";
+    // Collect version data
+    // - Base WordPress version
     global $wp_version;
-    $body = json_encode(array(
+    $body = array(
         'site_url' => site_url(),
         'wp_ver' => $wp_version,
         // TODO: Upload plugin and theme versions when API supports them
-    ));
+    );
+    // - Theme versions (if enabled)
+    if (!$plugin_options->e_api_disable_themes) {
+        // Prioritize current theme and its parent
+        $themes = array();
+        $current_theme = wp_get_theme();
+        if ($current_theme && $current_theme->exists()) {
+            $themes[$current_theme->get_stylesheet()] = $current_theme;
+            $parent_theme = $current_theme->parent();
+            if ($parent_theme !== false && $parent_theme->exists()) {
+                $themes[$parent_theme->get_stylesheet()] = $parent_theme;
+            }
+        }
+        $all_themes = wp_get_themes(array("errors" => false));
+        foreach ($all_themes as $theme_name => $wp_theme) {
+            $stylesheet = $wp_theme->get_stylesheet();
+            if (!in_array($stylesheet, $themes)) {
+                $themes[$stylesheet] = $wp_theme;
+                if (count($themes) >= 10) {
+                    break;
+                }
+            }
+        }
+        // Only upload theme version and path
+        $theme_data = array();
+        foreach ($themes as $theme_name => $wp_theme) {
+            // Theme must be located inside the WordPress folder
+            $theme_abs_path = $wp_theme->get_stylesheet_directory();
+            if (substr($theme_abs_path, 0, strlen(ABSPATH)) !== ABSPATH) {
+                continue;
+            }
+            $theme_dir = substr($theme_abs_path, strlen(ABSPATH));
+            $theme_data[$theme_name] = array(
+                'ver' => $wp_theme->version,
+                'path' => $theme_dir,
+            );
+        }
+        $body['themes'] = $theme_data;
+    }
+    // - End of collection
+    $body = json_encode($body);
     $api_url = 'https://xiaodu-jsdelivr-api.du9l.com/api/enlighten';
     $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, $body);
     if ($resp === false) {

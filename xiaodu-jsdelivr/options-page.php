@@ -188,6 +188,18 @@ function xiaodu_jsdelivr_options_init() {
     );
 
     add_settings_field(
+        'e_api_disable_themes',
+        'Don\'t upload themes data',
+        'xiaodu_jsdelivr_option_boolean_cb',
+        $page_name,
+        $api_section_name,
+        array(
+            'label_for' => 'e_api_disable_themes',
+            'desc' => 'When checked, theme names and versions will NOT be sent to API service for matching.',
+        )
+    );
+
+    add_settings_field(
         '_e_api_result',
         'API Access Result',
         'xiaodu_jsdelivr_api_result_cb',
@@ -234,7 +246,8 @@ function xiaodu_jsdelivr_status_data_cb( $args ) {
     $data_size = is_array($data) ? count($data) : 0;
     echo "<p>Scan data size: $data_size ";
     if (defined('WP_DEBUG') && WP_DEBUG) {
-        submit_button('Clear data - CAUTION: This will clear all scan results!', 'small', XiaoduJsdelivrOptions::$options_key . '[clear_data]', false);
+        submit_button('Clear scan results', 'small', XiaoduJsdelivrOptions::$options_key . '[clear_data]', false);
+        submit_button('Clear api cache', 'small', XiaoduJsdelivrOptions::$options_key . '[clear_api]', false);
     }
     echo '</p>';
 }
@@ -396,6 +409,12 @@ function xiaodu_jsdelivr_options_sanitize_filter( $value ) {
         unset($value['clear_data']);
         delete_option('xiaodu_jsdelivr_data');
         add_settings_error('xiaodu_jsdelivr_messages', 'clear_data', 'Data cleared...', 'info');
+    }
+    if (isset($value['clear_api'])) {
+        unset($value['clear_api']);
+        delete_transient('xiaodu_jsdelivr_api_resp');
+        delete_transient('xiaodu_jsdelivr_api_result');
+        add_settings_error('xiaodu_jsdelivr_messages', 'clear_api', 'API response cleared...', 'info');
     }
     if (isset($value['scan_now'])) {
         unset($value['scan_now']);

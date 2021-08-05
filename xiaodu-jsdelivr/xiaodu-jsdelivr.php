@@ -21,7 +21,7 @@ along with xiaodu-jsdelivr.  If not, see <https://www.gnu.org/licenses/>.
  * Plugin Name: xiaodu-jsdelivr
  * Plugin URI: https://wordpress.org/plugins/xiaodu-jsdelivr/
  * Description: Scan and serve static files from jsDelivr CDN <https://jsdelivr.com>.
- * Version: 1.3
+ * Version: 1.4
  * Requires at least: 5.3
  * Requires PHP: 7.2
  * Author: Xiaodu @ Du9L.com
