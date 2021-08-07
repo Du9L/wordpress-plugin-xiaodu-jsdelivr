@@ -4,7 +4,7 @@ Tags: jsdelivr,cdn,static
 Requires at least: 5.3
 Tested up to: 5.8
 Requires PHP: 7.2
-Stable tag: 1.4
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -41,6 +41,10 @@ See my [blog post](https://s.du9l.com/RKimP) for details.
 If you leave the toggle unchecked, nothing will be sent to the service.
 
 == Changelog ==
+
+= 1.4.1 =
+* Adopt WordPress remote request API for sending HTTP requests
+* Make a HEAD request to check API key to avoid useless data preparation
 
 = 1.4 =
 * Add theme version upload support for Scan API

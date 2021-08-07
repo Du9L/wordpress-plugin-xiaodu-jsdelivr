@@ -27,76 +27,45 @@ DEFINE('XIAODU_JSDELIVR_CRON_HOOK', 'xiaodu_jsdelivr_cron');
 
 // Utility function to fetch remote URL with compression
 
-function xiaodu_jsdelivr_get_remote_content($url, $timeout = null, $auth = null, $post = null) {
-    if (function_exists('curl_setopt') && curl_version()['version_number'] >= 0x070A05) {
-        // Use cURL and all its supported encodings
-        $curl = curl_init($url);
-        curl_setopt($curl, CURLOPT_ENCODING, '');
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($curl, CURLOPT_USERAGENT, 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)');
-        if ($timeout !== null) {
-            curl_setopt($curl, CURLOPT_TIMEOUT, $timeout);
-        }
-        if ($auth !== null) {
-            curl_setopt($curl, CURLOPT_USERPWD, $auth);
-        }
-        $headers = array();
-        if ($post !== null) {
-            curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'POST');
-            if (is_string($post)) {
-                curl_setopt($curl, CURLOPT_POSTFIELDS, $post);
-                $headers []= 'Content-Type: application/json';
-                $headers []= 'Content-Length: ' . strlen($post);
-            }
-        }
-        if ($headers) {
-            curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-        }
-        $data = curl_exec($curl);
-        curl_close($curl);
-        return $data;
-    } else {
-        // Use stream and gzip (if supported)
-        $stream_opt = array('http' => array(
-            'ignore_errors' => true,
-            'user_agent' => 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)',
-            'header' => array(),
-        ));
-        if ($timeout !== null) {
-            $stream_opt['http']['timeout'] = $timeout;
-        }
-        if ($auth !== null) {
-            $stream_opt['http']['header'][] = 'Authorization: Basic ' . base64_encode($auth);
-        }
-        if (function_exists('zlib_decode')) {
-            $stream_opt['http']['header'][] = 'Accept-Encoding: gzip';
-        }
-        if ($post !== null) {
-            $stream_opt['http']['method'] = 'POST';
-            if (is_string($post)) {
-                $stream_opt['http']['content'] = $post;
-                $stream_opt['http']['header'][]= 'Content-Type: application/json';
-                $stream_opt['http']['header'][]= 'Content-Length: ' . strlen($post);
-            }
-        }
-        $stream_ctx = stream_context_create($stream_opt);
-        $data = file_get_contents($url, false, $stream_ctx);
-        if ($data === FALSE) {
-            return $data;
-        }
-        $encoding = null;
-        foreach ($http_response_header as $line) {
-            if (strtolower(substr($line, 0, 5)) == 'http/') {
-                $encoding = null;
-            } else if (strtolower(substr($line, 0, 17)) == 'content-encoding:') {
-                $encoding = trim(substr($line, 17));
-            }
-        }
-        if ($encoding !== null && stripos($encoding, 'gzip') !== false) {
-            $data = zlib_decode($data);
-        }
-        return $data;
+function xiaodu_jsdelivr_get_remote_content($url, $timeout = null, $auth = null, $post = null, $head = false) {
+    if (!function_exists('wp_remote_request')) {
+        error_log('xiaodu_jsdelivr_get_remote_content: function wp_remote_request not found!');
+        return false;
     }
+    $args = array(
+        'method' => 'GET',
+        'timeout' => 10.,
+        'user-agent' => 'PHP WordPress Plugin (xiaodu-jsdelivr; Scanner)',
+        'headers' => array(),
+    );
+    if ($timeout !== null) {
+        $args['timeout'] = floatval($timeout);
+    }
+    if ($auth !== null) {
+        $args['headers']['Authorization'] = 'Basic ' . base64_encode($auth);
+    }
+    if ($post !== null) {
+        $args['method'] = 'POST';
+        if (is_string($post)) {
+            $args['body'] = $post;
+            $args['headers']['Content-Type'] = 'application/json';
+            $args['headers']['Content-Length'] = strval(strlen($post));
+        }
+    } else if ($head === true) {
+        $args['method'] = 'HEAD';
+    }
+    $response = wp_remote_request($url, $args);
+    if (is_wp_error($response)) {
+        error_log("Fetch remote url $url failed: " . $response->get_error_message());
+        return false;
+    }
+    if ($head === true) {
+        return array(
+            wp_remote_retrieve_response_code($response),
+            wp_remote_retrieve_headers($response)
+        );
+    }
+    return wp_remote_retrieve_body($response);
 }
 
 // Activation and deactivation hooks
@@ -409,8 +378,29 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     if ($cached_resp !== FALSE) {
         return $cached_resp;
     }
+    // Check if API requests failed recently
+    $last_result = get_transient('xiaodu_jsdelivr_api_result');
+    if (is_array($last_result) && $last_result['success'] === FALSE && time() - $last_result['time'] < 120) {
+        xiaodu_jsdelivr_debug_log('xiaodu_jsdelivr_get_scan_api_data: Recent API request failed, skipping...');
+        return null;
+    }
     // Send API request using the credentials above
     $auth = "{$plugin_options->e_api_key}:{$plugin_options->e_api_secret}";
+    // - Send HEAD request to check API key before collecting data
+    $api_url = 'https://xiaodu-jsdelivr-api.du9l.com/api/enlighten';
+    $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, null, true);
+    if (!is_array($resp) || count($resp) < 2) {
+        xiaodu_jsdelivr_record_api_result(array('_error' => '(HEAD) NETWORK ERROR'));
+        xiaodu_jsdelivr_debug_log("API HEAD ACCESS FAILED ", $resp);
+        return null;
+    }
+    $resp_code = $resp[0];
+    if ($resp_code !== 200) {
+        $resp_error = $resp[1]['X-API-Error'];
+        xiaodu_jsdelivr_record_api_result(array('_code' => $resp_code, '_error' => '(HEAD) ' . $resp_error));
+        xiaodu_jsdelivr_debug_log("API HEAD INVALID RESPONSE ", $resp);
+        return null;
+    }
     // Collect version data
     // - Base WordPress version
     global $wp_version;
@@ -459,7 +449,6 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     }
     // - End of collection
     $body = json_encode($body);
-    $api_url = 'https://xiaodu-jsdelivr-api.du9l.com/api/enlighten';
     $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, $body);
     if ($resp === false) {
         xiaodu_jsdelivr_record_api_result(array('_error' => 'NETWORK ERROR'));
