@@ -123,6 +123,12 @@ class XiaoduJsdelivrOptions
     public $replacer_auto_minified = false;
 
     /**
+     * Fail record time
+     * @var int
+     */
+    public $scanner_fail_record_time = 0;
+
+    /**
      * Enable API
      * @var bool
      */
@@ -145,4 +151,10 @@ class XiaoduJsdelivrOptions
      * @var bool
      */
     public $e_api_disable_themes = false;
+
+    /**
+     * API Timeout (sec)
+     * @var int
+     */
+    public $e_api_timeout = 0;
 }

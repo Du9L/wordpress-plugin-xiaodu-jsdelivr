@@ -156,6 +156,18 @@ function xiaodu_jsdelivr_options_init() {
         )
     );
 
+    add_settings_field(
+        'scanner_fail_record_time',
+        'Scanner failure record time',
+        'xiaodu_jsdelivr_option_integer_cb',
+        $page_name,
+        $default_section_name,
+        array(
+            'label_for' => 'scanner_fail_record_time',
+            'desc' => 'Time in seconds that a file will be skipped after failing to find its match. ("0" = default value: 21600)',
+        )
+    );
+
     // API section
     $api_section_name = 'xiaodu_jsdelivr_api';
     add_settings_section(
@@ -198,6 +210,18 @@ function xiaodu_jsdelivr_options_init() {
         array(
             'label_for' => 'e_api_secret',
             'desc' => 'Your API secret generated in the manager',
+        )
+    );
+
+    add_settings_field(
+        'e_api_timeout',
+        'API timeout (seconds)',
+        'xiaodu_jsdelivr_option_integer_cb',
+        $page_name,
+        $api_section_name,
+        array(
+            'label_for' => 'e_api_timeout',
+            'desc' => 'Timeout for accessing API service ("0" = default value: 8 seconds)',
         )
     );
 

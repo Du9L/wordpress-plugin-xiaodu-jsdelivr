@@ -177,6 +177,10 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
     if ($plugin_options->scanner_randomized) {
         shuffle($dir_contents);
     }
+    $fail_record_time = $plugin_options->scanner_fail_record_time;
+    if ($fail_record_time <= 0) {
+        $fail_record_time = 21600;
+    }
     foreach ($dir_contents as $name) {
         $full_path = $dir_full_path . '/' . $name;
         $path = $dir . '/' . $name;
@@ -207,7 +211,7 @@ function xiaodu_jsdelivr_scan_directory($dir, &$options) {
         $fail_record_key = '!' . $path;
         if (isset($old_data[$fail_record_key])) {
             $old_entry = $old_data[$fail_record_key];
-            if ($options['start_time'] > $old_entry['fail_time'] + 7200) {
+            if ($options['start_time'] > $old_entry['fail_time'] + $fail_record_time) {
                 // Failure records expired
                 unset($old_data[$fail_record_key]);
             } else {
@@ -387,8 +391,12 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     // Send API request using the credentials above
     $auth = "{$plugin_options->e_api_key}:{$plugin_options->e_api_secret}";
     // - Send HEAD request to check API key before collecting data
+    $timeout = $plugin_options->e_api_timeout;
+    if ($timeout <= 0) {
+        $timeout = 8;
+    }
     $api_url = 'https://xiaodu-jsdelivr-api.du9l.com/api/enlighten';
-    $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, null, true);
+    $resp = xiaodu_jsdelivr_get_remote_content($api_url, $timeout, $auth, null, true);
     if (!is_array($resp) || count($resp) < 2) {
         xiaodu_jsdelivr_record_api_result(array('_error' => '(HEAD) NETWORK ERROR'));
         xiaodu_jsdelivr_debug_log("API HEAD ACCESS FAILED ", $resp);
@@ -449,7 +457,7 @@ function xiaodu_jsdelivr_get_scan_api_data() {
     }
     // - End of collection
     $body = json_encode($body);
-    $resp = xiaodu_jsdelivr_get_remote_content($api_url, 8, $auth, $body);
+    $resp = xiaodu_jsdelivr_get_remote_content($api_url, $timeout, $auth, $body);
     if ($resp === false) {
         xiaodu_jsdelivr_record_api_result(array('_error' => 'NETWORK ERROR'));
         xiaodu_jsdelivr_debug_log("API ACCESS FAILED ", $resp);
