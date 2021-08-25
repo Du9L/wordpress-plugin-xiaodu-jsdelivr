@@ -42,7 +42,7 @@ If you leave the toggle unchecked, nothing will be sent to the service.
 
 == Changelog ==
 
-= 1.4.2=
+= 1.4.2 =
 * Add options to control API access timeout and scan failure record timeout
 
 = 1.4.1 =
