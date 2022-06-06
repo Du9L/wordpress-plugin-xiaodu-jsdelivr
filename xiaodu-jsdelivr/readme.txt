@@ -2,7 +2,7 @@
 Contributors: dujiulun2006
 Tags: jsdelivr,cdn,static
 Requires at least: 5.3
-Tested up to: 5.9
+Tested up to: 6.0
 Requires PHP: 7.2
 Stable tag: 1.4.2
 License: GPLv2 or later
